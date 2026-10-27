@@ -50,6 +50,9 @@ class WindowCaptureScreenshots {
         let scaleFactor: CGFloat
         let isFullscreen: Bool
         let fullRes: Bool
+        var state: ThumbnailCapturePolicy.Geometry {
+            ThumbnailCapturePolicy.Geometry(size: size, scaleFactor: scaleFactor, isFullscreen: isFullscreen)
+        }
     }
 
     private struct PendingCapture {
@@ -315,9 +318,7 @@ class WindowCaptureScreenshots {
         guard source != .refreshOnlyThumbnailsAfterShowUi || SwitcherSession.isActive else { return }
         DispatchQueue.main.async { [weak window] in
             guard let window, source != .refreshOnlyThumbnailsAfterShowUi || SwitcherSession.isActive else { return }
-            guard window.size == geometry.size,
-                  WindowThumbnails.captureScaleFactor(window) == geometry.scaleFactor,
-                  window.isFullscreen == geometry.isFullscreen else { return }
+            guard WindowThumbnails.captureGeometry(window) == geometry.state else { return }
             let expectedSize = WindowThumbnails.capturePixelSize(
                 area?.size ?? geometry.size,
                 geometry.scaleFactor,

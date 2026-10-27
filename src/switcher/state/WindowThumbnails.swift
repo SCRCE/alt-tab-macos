@@ -111,10 +111,13 @@ enum WindowThumbnails {
         // Stage Manager drawing inside a full-size canvas. Below macOS 26, CGSHWCaptureWindowList chooses
         // its own output size, so the same comparison could reject valid captures.
         guard #available(macOS 26.0, *) else { return false }
-        guard let size = window.size, let actual = contentSize ?? contents.size(),
-              let expected = expectedSize ?? capturePixelSize(size, captureScaleFactor(window), fullRes)
+        guard let geometry = captureGeometry(window), let actual = contents.size(),
+              let expected = expectedSize ?? capturePixelSize(geometry.size, geometry.scaleFactor, fullRes)
         else { return false }
-        let partial = ThumbnailCapturePolicy.isPartial(actual, expected)
+        let partial = window.thumbnailCapturePolicy.isPartial(actual: actual, expected: expected,
+                                                              contentSize: contentSize,
+                                                              allowsContentChange: isFocused(window),
+                                                              geometry: geometry)
         if partial { Logger.debug { "\(window.debugId) partial frame \(actual) expected \(expected) fullRes:\(fullRes)" } }
         return partial
     }
@@ -128,10 +131,13 @@ enum WindowThumbnails {
         expectedSize: CGSize? = nil
     ) -> Bool {
         guard #available(macOS 26.0, *),
-              window.cgWindowId != nil, let size = window.size, let actual = contentSize ?? contents.size(),
-              let expected = expectedSize ?? capturePixelSize(size, captureScaleFactor(window), false)
+              window.cgWindowId != nil, let geometry = captureGeometry(window), let actual = contents.size(),
+              let expected = expectedSize ?? capturePixelSize(geometry.size, geometry.scaleFactor, false)
         else { return true }
-        let decision = window.thumbnailCapturePolicy.evaluate(actual: actual, expected: expected)
+        let decision = window.thumbnailCapturePolicy.evaluate(actual: actual, expected: expected,
+                                                              contentSize: contentSize,
+                                                              allowsContentChange: isFocused(window),
+                                                              geometry: geometry)
         if decision == .accept {
             return true
         }
@@ -143,6 +149,20 @@ enum WindowThumbnails {
             refreshAsync([window], .refreshUiAfterExternalEvent)
         }
         return false
+    }
+
+    static func captureGeometry(_ window: Window) -> ThumbnailCapturePolicy.Geometry? {
+        guard let size = window.size else { return nil }
+        return ThumbnailCapturePolicy.Geometry(
+            size: size,
+            scaleFactor: captureScaleFactor(window),
+            isFullscreen: window.isFullscreen
+        )
+    }
+
+    private static func isFocused(_ window: Window) -> Bool {
+        Applications.frontmostPid == window.application.pid && window.application.focusedWindow === window &&
+            !window.isMinimized
     }
 
     /// Dispatch screenshot requests off the main-thread. These captures are thumbnail-scale ONLY (on
